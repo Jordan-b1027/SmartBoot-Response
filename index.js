@@ -130,7 +130,7 @@ function sendDemo(accountNumber, transaction, placeName, systemName, zoneNumber,
 			}
 			// Account exists and is verified
 			// Send the alert
-			runCommand(ttsCommands[0].command.replace("%s", `/tmp/${transaction}.wav`), `Hello. This is an automated call from KCA SecuriNet Monitoring. ${systemName} has reported a ${event}, ZONE ${zoneNumber}, ${zoneName}, at ${placeName}`).then((output) => {
+			runCommand(ttsCommands[0].command.replace("%s", `/tmp/${transaction}.wav`), `${process.env.CALL_PREFIX_TEXT} ${systemName} has reported a ${event}, ZONE ${zoneNumber}, ${zoneName}, at ${placeName}`).then((output) => {
 				runCommand(`ffmpeg -y -i /tmp/${transaction}.wav -ar 8000 -ac 1 -c:a pcm_s16le /tmp/${transaction}-alert.wav`).then(() => {
 					runCommand(`rm /tmp/${transaction}.wav`)
 					// strip extension from filename
@@ -204,7 +204,7 @@ function sendAlert(accountNumber, transaction, placeName, systemName, zoneNumber
 
 					// Account exists and is verified
 					// Send the alert
-					runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${transaction}.wav`), `Hello. This is an automated call from KCA SecuriNet Monitoring. ${systemName} has reported a ${event}, ZONE ${zoneNumber}, ${zoneName}, at ${placeName}`).then((output) => {
+					runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${transaction}.wav`), `${process.env.CALL_PREFIX_TEXT} ${systemName} has reported a ${event}, ZONE ${zoneNumber}, ${zoneName}, at ${placeName}`).then((output) => {
 						runCommand(`ffmpeg -y -i /tmp/${transaction}.wav -ar 8000 -ac 1 -c:a pcm_s16le /tmp/${transaction}-alert.wav`).then(() => {
 							runCommand(`rm /tmp/${transaction}.wav`)
 							// strip extension from filename
@@ -267,7 +267,7 @@ function sendTTS(accountNumber, transaction, text) {
 				} else if (row) {
 					// Account exists and is verified
 					// Send the alert
-					runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${transaction}.wav`), `Hello. This is an automated call from KCA SecuriNet Monitoring. ${textFiltered}`).then((output) => {
+					runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${transaction}.wav`), `${process.env.CALL_PREFIX_TEXT} ${textFiltered}`).then((output) => {
 						runCommand(`ffmpeg -y -i /tmp/${transaction}.wav -ar 8000 -ac 1 -c:a pcm_s16le /tmp/${transaction}-tts.wav`).then(() => {
 							runCommand(`rm /tmp/${transaction}.wav`)
 							// strip extension from filename
@@ -315,38 +315,40 @@ function sendTTS(accountNumber, transaction, text) {
 }
 
 function sendVerificationCode(account) {
-	// Get verification code from database
-	db.get("SELECT * FROM accounts WHERE id = ?", account, (err, row) => {
-		if (err) {
-			console.error(err);
-		} else if (row) {
-			if (new Date(row.cooldown) > new Date()) {
-				reject("Cooldown");
-			} else {
-				newCooldown = new Date();
-				newCooldown.setMinutes(newCooldown.getMinutes() + 5);
+	return new Promise((resolve, reject) => {
+		// Get verification code from database
+		db.get("SELECT * FROM accounts WHERE id = ?", account, (err, row) => {
+			if (err) {
+				console.error(err);
+			} else if (row) {
+				if (new Date(row.cooldown) > new Date()) {
+					reject("Cooldown");
+				} else {
+					newCooldown = new Date();
+					newCooldown.setMinutes(newCooldown.getMinutes() + 5);
 
-				db.run("UPDATE accounts SET cooldown = ? WHERE id = ?", newCooldown.toISOString(), accountNumber, (err) => {
-					if (err) {
-						console.error(err);
-					}
-				});
-			}
-			// Send verification code to phone number
-			runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${account}-code.wav`), `Hello. This is an automated call from KCA SecuriNet Monitoring. To verify your phone number, use the slash verify command on Discord. Your verification code is ${row.verification_code.split("").join(", ")}. Repeating, your code is ${row.verification_code.split("").join(", ")}. Once again, your code is ${row.verification_code.split("").join(", ")}`).then((output) => {
-				runCommand(`ffmpeg -y -i /tmp/${account}-code.wav -ar 8000 -ac 1 -c:a pcm_s16le /tmp/${account}-verification.wav`).then(() => {
-					runCommand(`rm /tmp/${account}-code.wav`)
-					// strip extension from filename
+					db.run("UPDATE accounts SET cooldown = ? WHERE id = ?", newCooldown.toISOString(), accountNumber, (err) => {
+						if (err) {
+							console.error(err);
+						}
+					});
+				}
+				// Send verification code to phone number
+				runCommand(ttsCommands[row.ttsOverride].command.replace("%s", `/tmp/${account}-code.wav`), `${process.env.CALL_PREFIX_TEXT} To verify your phone number, use the slash verify command on Discord. Your verification code is ${row.verification_code.split("").join(", ")}. Repeating, your code is ${row.verification_code.split("").join(", ")}. Once again, your code is ${row.verification_code.split("").join(", ")}`).then((output) => {
+					runCommand(`ffmpeg -y -i /tmp/${account}-code.wav -ar 8000 -ac 1 -c:a pcm_s16le /tmp/${account}-verification.wav`).then(() => {
+						runCommand(`rm /tmp/${account}-code.wav`)
+						// strip extension from filename
 
-					runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${account}-verification "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
-						console.log(`Verification code sent to ${row.phone}`);
+						runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${account}-verification "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+							console.log(`Verification code sent to ${row.phone}`);
+						})
 					})
 				})
-			})
-		} else {
-			return;
-			// Account does not exist or is not verified
-		}
+			} else {
+				return;
+				// Account does not exist or is not verified
+			}
+		});
 	});
 }
 
@@ -422,14 +424,19 @@ client.on("interactionCreate", async (interaction) => {
 								if (err) {
 									console.error(err);
 								} else {
-									interaction.reply({
-										content: `Account created. Our system will call you shortly with a verification code. Please enter that code into \`/verify\``,
-										ephemeral: true
-									}).then(() => {
-										setTimeout(() => {
-											sendVerificationCode(accountNumber);
-										}, 5000); // Wait 5 seconds before calling so user has time to read message
-									});
+									sendVerificationCode(accountNumber).then(() => {
+										interaction.reply({
+											content: `Account created. Our system will call you shortly with a verification code. Please enter that code into \`/verify\``,
+											ephemeral: true
+										})
+									}).catch(err => {
+										if (err == "Cooldown") {
+											interaction.reply({
+												content: "You are on cooldown, please wait before trying again.",
+												ephemeral: true
+											});
+										}
+									})
 								}
 							});
 						}
@@ -462,11 +469,19 @@ client.on("interactionCreate", async (interaction) => {
 						if (err) {
 							console.error(err);
 						} else if (row) {
-							sendVerificationCode(row.id);
-							interaction.reply({
-								content: `Verification code resent to ${row.phone}`,
-								ephemeral: true
-							});
+							sendVerificationCode(row.id).then(() => {
+								interaction.reply({
+									content: `Verification code resent to ${row.phone}`,
+									ephemeral: true
+								});
+							}).catch((err) => {
+								if (err == "Cooldown") {
+									interaction.reply({
+										content: "You are on cooldown, please wait before trying again.",
+										ephemeral: true
+									});
+								}
+							})
 						} else {
 							interaction.reply({ ephemeral: true, content: "You don't have an unverified account." });
 						}
