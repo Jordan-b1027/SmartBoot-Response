@@ -7,6 +7,7 @@ const app = express();
 const ws = expressWs(app);
 const port = process.env.PORT || 3000;
 const { exec } = require("child_process");
+const { call } = require("./telephony");
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database("./database.db");
 const ttsCommands = require("./tts.json")
@@ -209,7 +210,7 @@ function sendAlert(accountNumber, transaction, placeName, systemName, zoneNumber
 							runCommand(`rm /tmp/${transaction}.wav`)
 							// strip extension from filename
 
-							runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${transaction}-alert "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+							call(row.phone,`/tmp/${transaction}-alert`).then(() => {
 								console.log(`Alert sent to ${row.phone}`);
 								resolve();
 							}).catch((error) => {
@@ -225,7 +226,7 @@ function sendAlert(accountNumber, transaction, placeName, systemName, zoneNumber
 										if (err) {
 											console.error(err);
 										} else if (row) {
-											runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${transaction}-alert "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+											call(row.phone,`/tmp/${transaction}-alert`).then(() => {
 												console.log(`Alert sent to ${row.phone}`);
 											}).catch((error) => {
 												console.error(error);
@@ -272,7 +273,7 @@ function sendTTS(accountNumber, transaction, text) {
 							runCommand(`rm /tmp/${transaction}.wav`)
 							// strip extension from filename
 
-							runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${transaction}-tts "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+							call(row.phone,`/tmp/${transaction}-tts`).then(() => {
 								console.log(`TTS sent to ${row.phone}`);
 								resolve();
 							}).catch((error) => {
@@ -288,7 +289,7 @@ function sendTTS(accountNumber, transaction, text) {
 										if (err) {
 											console.error(err);
 										} else if (row) {
-											runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${transaction}-tts "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+											call(row.phone,`/tmp/${transaction}-tts`).then(() => {
 												console.log(`TTS sent to ${row.to}`);
 											}).catch((error) => {
 												console.error(error);
@@ -339,7 +340,7 @@ function sendVerificationCode(account) {
 						runCommand(`rm /tmp/${account}-code.wav`)
 						// strip extension from filename
 
-						runCommand(`/var/lib/asterisk/bin/originate ${row.phone} roblox.s.1 0 0 /tmp/${account}-verification "IktDQSBTZWN1cmlOZXQiIDw5OTk5Pg=="`).then(() => {
+						call(row.phone,`/tmp/${account}-verification`).then(() => {
 							console.log(`Verification code sent to ${row.phone}`);
 						})
 					})
